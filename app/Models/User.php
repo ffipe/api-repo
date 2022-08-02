@@ -42,10 +42,10 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    public function permissions()
-    {
-        return $this->hasMany(Permission::class);
-    }
+    // public function permissions()
+    // {
+    //     return $this->hasMany(Permission::class);
+    // }
 
     public function permission()
     {

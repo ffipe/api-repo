@@ -15,10 +15,10 @@ class Permission extends Model
         'user_id', 'role_id', 'application_id'
     ];
 
-    public function users()
-    {
-        return $this->belongsTo(User::class);
-    }
+    // public function users()
+    // {
+    //     return $this->belongsTo(User::class);
+    // }
 
     public function application()
     {

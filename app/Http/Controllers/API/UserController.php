@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\API;
 
-use Validator;
+use App\Http\Controllers\API\BaseController;
+use App\Models\Application;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\Permission;
-use App\Models\Application;
 use Illuminate\Http\Request;
-use App\Http\Controllers\API\BaseController;
+use Validator;
 
 class UserController extends BaseController
 {
@@ -39,6 +39,69 @@ class UserController extends BaseController
             'email' => 'required|email',
             'password' => 'required',
             'confirm_password' => 'required|same:password',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+        $input['password'] = bcrypt($input['password']);
+
+        $user = User::create($input);
+
+        return $this->sendResponse($user, 'User added successfully.');
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($email, $application)
+    {
+        $user = User::with((['permission' => function ($query) use ($application) {
+            $query->whereHas('application', function ($query) use ($application) {
+                $query->where('name', $application);
+            });
+        }
+            , 'permission.application', 'permission.role']))
+            ->where('email', $email)
+            ->first();
+
+        if (is_null($user->permission)) {
+            return $this->sendError('User permissions for application not found');
+        }
+
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'application' => $user->permission->application->name,
+            'role' => $user->permission->role->name,
+        ];
+
+        return $this->sendResponse($data, 'User permissions retirived');
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $user = User::find($id);
+
+        if (is_null($user)) {
+            return $this->sendError("User not found");
+        }
+        
+        $input = $request->all();
+
+        $validator = Validator::make($input, [
             'application' => 'required',
             'role' => 'required',
         ]);
@@ -46,9 +109,6 @@ class UserController extends BaseController
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
-
-        unset($input['application']);
-        unset($input['role']);
 
         $application = Application::where('name', $request->application)->first();
 
@@ -62,9 +122,16 @@ class UserController extends BaseController
             return $this->sendError("Application '" . $request->role . "' not found");
         }
 
-        $input['password'] = bcrypt($input['password']);
+        $permission = Permission::where([
+            'user_id' => $id,
+            'application_id' => $application->id
+        ])->first();
 
-        $user = User::create($input);
+        if (! is_null($permission)) {
+            $permission->role_id = $role->id;
+            $permission->save();
+            return $this->sendResponse([], 'Role for user updated');
+        }
 
         $permision_input = [
             'user_id' => $user->id,
@@ -75,56 +142,6 @@ class UserController extends BaseController
         $permision = Permission::create($permision_input);
 
         return $this->sendResponse($permision, 'User register successfully.');
-    }
-
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show($email, $application)
-    {
-        $user = User::with(['permissions.application', 'role.role'])
-            ->where('email', $email)
-            ->whereHas('permissions.application', function ($query) use ($application) {
-                // $query->whereHas('application', function ($query) use ($application) {
-                    $query->where('name', $application);
-                // });
-            })
-            ->first();
-        return $user;
-        // dd($user->permission);
-
-        if (is_null($user)) {
-            return $this->sendError('User permissions for application not found');
-        }
-
-        $data = [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'application' => $user->permissions->application->name,
-            'role' => $user->role->role->name
-        ];
-
-        return $this->sendResponse($data, 'User permissions retirived');
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, User $user)
-    {
-        $input = $request->all();
-
-        dd();
-
-        // return response()->json($input);
     }
 
     /**
